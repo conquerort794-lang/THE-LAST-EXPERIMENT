@@ -1,0 +1,518 @@
+THE LAST EXPERIMENT - Whispering Marsh prototype - PROGRESS
+============================================================
+STEPS COMPLETED: 1, 2, 3, 4, 5, 6
+CURRENT STEP: 7 (final testing / visual verification) - PARTIALLY completed
+STEPS REMAINING: finish browser visual testing and fix any issues found
+FILES MODIFIED: game.js only (index.html and style.css are unchanged)
+
+STEP 1 NOTES (how the project works)
+- 3 files only: index.html, style.css, game.js. Canvas 2D, tile size T=32, zoom Z=1.5.
+- Map = {t:[rows of tile ids], w, h}. buildWorld() (game.js ~line 45) makes a 60x44 map using a
+  seeded RNG (rnd, seed=11). IMPORTANT: any extra rnd() call BEFORE the existing ones changes the
+  whole existing map. buildAbyss() also uses rnd() AFTER buildWorld.
+- Tile ids: 0 grass, 1 tree(solid), 2 water(solid), 3 path, 4 rock(solid), 5 wall(solid),
+  6 house floor, 7 lab floor, 8 corrupted ground (unused base), 9 abyss floor.
+  SOLID = Set([1,2,4,5]) at top of file. tile(v,x,y) draws each tile (~line 238).
+  Ids 0/1/4 pick colours with `cor = x>=40` (corrupted palette).
+- Zones are decided by X only: zoneOf(p) (~line 234): <20 Greenhaven, <40 Forgotten Village, else
+  Corrupted Zone; inLab() special-cases the lab. render() ends with a per-zone colour tint (~line 316)
+  whose default fallback is a dark-blue tint.
+- Layout: river x~19-20; main road y=22-23 (x1..56); north path x30-31 y12-21; village houses at
+  (24-29,13-18), (34-38,26-30), (24-28,27-31); cave (3-8,31-36); lab (45-57,5-16); border = tile 1.
+- Enemies: ET table (~line 13), mk(type,x,y), updE() generic chase AI (supports `shoot` for ranged),
+  drawE() draws each type by name, ZN = spawn rectangles per type, respawn() uses `mins` per type,
+  initWorld() does the first spawn. 'wraith' is Abyss-only.
+- Saves store only the player (P) in localStorage; the map is rebuilt each load, so map changes
+  do not break saves.
+
+STEP 2 DECISION (where to attach the marsh)
+- The bottom border of the map (row y=43) is solid trees and nothing exists south of it.
+- Chosen design: APPEND 24 new rows (y=44..67) to the existing map = the marsh, and open a gap in
+  the old south border at x=30-31 with a path that runs from the main road (y=24) to y=43, then
+  on into the marsh. x=30-31 is free between two village houses, so it reads as "the south road of
+  the Forgotten Village leads to the marsh".
+- Why: nothing existing is moved, spawn zones (y<=42) are untouched, camera/render/isSolid already
+  use M.w/M.h so they adapt. Marsh uses its OWN private RNG so the old world layout stays identical.
+- Marsh zone detection: p.y/T >= MY0 (MY0=44).
+- New tile ids planned: 10 marsh ground, 11 murky water (solid), 12 shallows (walkable).
+
+STEP 3 RESULT (done, verified with a node script)
+- game.js changes (search for MY0, buildMarsh, rect2, tile ids 10/11/12):
+  * SOLID now also contains 11 (murky water).
+  * const MY0=44,MH=24 added after ZN. Map grows from 60x44 to 60x68 (marsh = rows 44..67).
+  * buildWorld(): before its return, `rect(30,24,31,43,3);buildMarsh(t);` opens the south road
+    (x=30-31, y=24..43) through the old tree border; returns h:t.length.
+  * buildMarsh(t)+rect2(): appends the rows. Border = tile 1 (x=0, x=59, y=67). Ground = 10.
+    6 pools (ellipses): core 11 (solid) + ring 12 (walkable shallows). Path tile 3 at x30-31,y44-50.
+    A shallow ford (12) at x24-37,y50-51. Uses NO rnd() (old map stays identical).
+  * tile(): new drawing for 10/11/12; tiles 1 (tree) and 4 (rock) get marsh colours when y>=MY0
+    via the new `mar` flag.
+  * zoneOf(): returns 'The Whispering Marsh' when p.y/T>=MY0 (checked after the Abyss check).
+  * render() tint line: added a faint teal tint for the marsh (so it avoids the default dark blue).
+- Verified: old rows 0-43 identical except the 2-wide road carve; Abyss identical; all 1074
+  walkable marsh tiles are reachable from the player start (BFS).
+- Marsh contains NO decorations, NO fog, NO enemies yet (all later steps).
+
+KNOWN BUGS / UNFINISHED
+- Not yet tested in a real browser (only node syntax check + map BFS). Step 7 must do a visual pass.
+- Marsh is empty/flat until Step 4. No enemy spawns in the marsh yet (ZN/respawn untouched).
+- Pitfall for later steps: in initWorld() enemies spawn via randSpot(...ZN[type]); a marsh enemy
+  needs its own ZN entry like [2,46,57,65] (tile coords) AND must be added to respawn() `mins`
+  and to initWorld()'s counts object, plus a drawE() branch and an ET entry.
+- Quest progress uses type names (slime/mutant/...), so a new enemy type will not affect quests.
+
+INSTRUCTIONS FOR THE NEXT AI
+1. Read this file, then inspect game.js (search MY0, buildMarsh, tile). Do NOT redo steps 1-3.
+2. Start at STEP 4: decorations. Suggested approach: inside buildMarsh() (after pools) add a
+   tiny private RNG (e.g. `let s=7;const mr=()=>(s=(s*1664525+1013904223)>>>0)/4294967296;`) -
+   NOT the global rnd() - and scatter: tile 1 (trees, dense near the border and sparse inside),
+   tile 4 (rocks), keeping x30-31,y44-50 and the ford y50-51 clear. For non-solid plants
+   (reeds, mushrooms, lily pads) add a small array MARSH_DECOR drawn in tile() or render() with
+   hs(x,y)-style hashing; do not make them solid. Re-run a reachability check afterwards (BFS from
+   tile 5,22 to every non-solid marsh tile) - a copy of the method: load lines up to
+   `const WORLD=buildWorld()` of game.js in node with a stubbed `document`.
+3. Then step 5 (fog/glow: draw in render() only when zoneOf(P) is the marsh; use time-based
+   alpha, keep it cheap), step 6 (one enemy, e.g. 'bogling'), step 7 (test + fix).
+4. Never remove existing features. Update this file after each step.
+
+
+STEP 4 RESULT (completed)
+- Added 53 deterministic, non-solid marsh decorations: reeds, mushrooms, roots, flowers and lily clusters.
+- Added 34 sparse solid tree/rock obstacles, weighted toward the edges and kept away from the entrance road and ford.
+- Uses a private local RNG inside buildMarsh(); it does NOT call or alter the global rnd() seed.
+- Decorations are depth-sorted with the player/enemies and only drawn when the player is in the Marsh.
+
+STEP 5 RESULT (completed)
+- Added lightweight drifting mist and firefly-like glows while the player is in The Whispering Marsh.
+- Uses a small fixed number of gradients and particles per frame; no external assets or libraries.
+- Atmosphere is disabled outside the Marsh and in the Abyss.
+
+STEP 6 RESULT (completed)
+- Added a new enemy type: bogling.
+- Bogling has its own stats, swamp spawn rectangle, initial spawn count, respawn target, death-burst colour and custom animated Canvas drawing.
+- Uses the existing generic melee chase/attack AI, so no new combat system was introduced.
+- Spawn area: x=2..57, y=46..65 (tile coordinates). Spawn checks still use the existing collision-aware randSpot().
+
+STEP 7 TESTING (partially completed)
+- PASS: `node --check game.js` (JavaScript syntax check).
+- PASS: procedural map harness confirms map remains 60x68.
+- PASS: old map rows 0..43 are unchanged compared with the supplied Step 3 project, except for the already-planned two-tile-wide south road carve at x=30..31.
+- PASS: BFS reachability from the south entrance found 0 unreachable walkable Marsh tiles (1,040 walkable Marsh tiles).
+- PASS: 53 decorations generated; tree/rock obstacles do not disconnect any walkable Marsh tiles.
+- NOT VERIFIED: full in-browser visual/gameplay pass. Headless Chromium did not complete a usable dump in this environment, so do not claim visual testing is complete. Please open the project in a normal browser and check the Marsh entrance, decoration layering, fog, bogling movement/combat, and that existing regions still look normal.
+
+HANDOVER FOR NEXT AI
+1. Read this file and inspect the latest game.js before editing.
+2. Steps 1-6 are implemented. Do NOT recreate the Marsh or repeat those steps.
+3. Continue Step 7 by opening index.html in a real browser, entering the Marsh, and visually checking collision, decoration depth sorting, fog/glows, and bogling spawning/attacks/death.
+4. Check that the existing Greenhaven, Forgotten Village, Corrupted Zone, Laboratory, quests, Abyss, saving, and combat still work.
+5. Fix only bugs found in testing. Update this file with test results and modified files.
+6. If continuing development after verification, make a new explicit plan first. The current requested prototype scope is otherwise implemented.
+
+
+MILESTONE 1 - COMPLETE THE REMAINING WORLD REGIONS
+=================================================
+CURRENT STATUS: In progress. Do not mark the milestone complete yet.
+
+INITIAL REGION AUDIT (based on the current checkpoint)
+- Greenhaven: grassland, river, lake, cave-like stone entrance, Elder Mira, and slime enemies.
+  The terrain is functional but has limited region-specific props and landmarks.
+- Forgotten Village: three damaged/abandoned houses, roads, Keeper Tobb, and the glowing shard
+  quest objective. This is the first region selected for a visual-completion pass.
+- Corrupted Zone: corrupted ground palette, mutant enemies, The Echo, and access to the laboratory.
+  It currently has limited unique landmarks and environmental storytelling.
+- Abandoned Laboratory: compact rectangular lab, terminal interaction, and Warden boss. The interior
+  has a basic floor/wall treatment and needs more distinct rooms and environmental detail later.
+- The Whispering Marsh: prototype terrain, decorations, fog/glows, and Bogling are implemented.
+  User-reported core tests passed; fog/glow visual verification is deferred to the major completion test.
+- The Abyss: compact death arena with wraith encounter and exit portal. It is a gameplay arena rather
+  than a fully developed exploration region at this stage.
+- The cave entrance is currently part of Greenhaven's map rather than a separately named region.
+
+DEVELOPMENT ORDER PROPOSED
+1. Forgotten Village visual identity and landmarks.
+2. Greenhaven environmental identity and cave approach.
+3. Corrupted Zone landmarks, environmental storytelling, and traversal interest.
+4. Abandoned Laboratory room variety and experiment storytelling.
+5. Review the Marsh and Abyss for consistency, then run the major full-game test.
+
+FIRST IMPLEMENTATION TASK - FORGOTTEN VILLAGE VISUAL PASS (initial slice)
+- Added 16 deterministic, non-solid environmental props: broken fences, barrels, crates, lanterns,
+  rubble, and weeds.
+- Props are depth-sorted with the player, NPCs, enemies, and loot.
+- Props do not change map tiles, collision, enemy spawns, quests, or the global random seed.
+- Files changed: game.js only.
+
+VALIDATION
+- PASS: `node --check game.js` (JavaScript syntax check after the village visual pass).
+- NOT VERIFIED: in-browser visual appearance, layering, and overlap clearance. Check these during
+  the next browser test; adjust only if an actual issue is observed.
+- This is an initial visual slice, NOT completion of Forgotten Village or Milestone 1.
+
+NEXT TASK
+- Inspect the new village props in a browser at the house entrances, main road, shard location,
+  Keeper Tobb, and village paths. Then continue the village pass with only grounded additions that
+  improve navigation or storytelling without blocking existing routes.
+- After the village pass, proceed to Greenhaven, then Corrupted Zone, then Abandoned Laboratory.
+
+MILESTONE 1 - WORLD REGION COMPLETION UPDATE (2026-11-18)
+=========================================================
+IMPLEMENTATION STATUS: Region-content pass completed across the existing world.
+FINAL VISUAL PLAYTEST: PENDING (must be performed in a normal browser during the major completion test).
+
+ADDITIONAL REGION CONTENT IMPLEMENTED
+- Greenhaven: added small forest/riverbank flowers, stones, a stump, a trail sign and a campfire landmark near the cave approach.
+- Forgotten Village: added collapsed timber/roof-beam debris around existing house footprints, supplementing the earlier barrels, crates, broken fences, lanterns, rubble and weeds. Existing house walls, floors, doors, shard position and quest flow were not moved.
+- Corrupted Zone: added corrupted crystals, spreading tendrils, wreckage and bone remains to strengthen its failed-experiment identity.
+- Abandoned Laboratory: added containment pods, a console, examination table and exposed cable details inside existing floor space. Existing terminal location, room boundaries and Warden encounter were not moved.
+- Whispering Marsh: retained the existing terrain, pools, decorations, atmosphere and Bogling implementation. User-reported core gameplay tests passed; fog/glow visual verification is deferred to the major completion test as requested.
+- The Abyss: existing death arena, wraith encounter and exit portal retained unchanged. It remains a compact gameplay arena, not a full exploration region; no scope-expanding redesign was made in this milestone.
+
+IMPLEMENTATION SAFETY
+- New Greenhaven/Village/Corrupted landmarks are visual-only Canvas decorations.
+- Laboratory props are visual-only and placed within existing lab floor space.
+- No map tiles, collision rules, player spawn, enemy spawn zones, quest logic, NPC positions, loot, save format, or global random seed were changed by this region-content pass.
+- Decorations are added to the existing depth-sorted render list.
+
+FILES CHANGED IN THIS UPDATE
+- game.js: added REGION_DECOR and LAB_DECOR data plus drawRegionDecor() and drawLabDecor(); added their depth-sorted render calls.
+- PROGRESS.txt: updated this handover and milestone record.
+- index.html and style.css unchanged.
+
+VALIDATION
+- PASS: `node --check game.js` (syntax validation).
+- NOT VERIFIED: browser visual appearance, depth sorting, overlaps, and performance for the new landmarks.
+- NOT VERIFIED: full regression across quests, saving/loading, combat, all region transitions, Marsh atmosphere and Abyss return.
+- Do not claim Milestone 1 has passed final QA until the major completion playtest is performed.
+
+MILESTONE 1 EXIT CRITERIA
+- Region-content implementation: COMPLETE.
+- Forgotten Village visual pass: COMPLETE as a visual-detail pass; existing houses remain the original map structures, with added collapsed-beam details. No new building interiors were added.
+- Greenhaven visual identity pass: COMPLETE.
+- Corrupted Zone environmental storytelling pass: COMPLETE.
+- Laboratory visual-detail pass: COMPLETE.
+- Marsh/Abyss scope review: COMPLETE; Marsh's atmosphere verification remains intentionally deferred.
+- Final full-game browser QA: DEFERRED to the major completion test, per user decision.
+
+NEXT HANDOVER
+1. Use this ZIP as the latest source of truth.
+2. Do not repeat the region-content implementation or overwrite it with an older checkpoint.
+3. During the major completion test, visually inspect each new landmark and confirm no paths, doors, shard, NPCs, enemies or interactions are obscured.
+4. Specifically verify the Lab props do not obscure the terminal or Warden; verify Marsh fog/glows; verify all regions, combat, quests, save/load and Abyss return.
+5. Fix only confirmed issues, update this file, and then mark Milestone 1 fully QA-complete.
+
+MILESTONE 2 - WORLD DEPTH & EXPLORATION (2026-11-18)
+===================================================
+STATUS: IN PROGRESS. First implementation slice completed; browser playtest pending.
+
+SLICE 1 - FIRST HIDDEN DISCOVERIES
+- Added three optional exploration discoveries placed on existing walkable ground:
+  * Greenhaven: Surveyor's Cache - a short clue about the forest being deliberately planted; rewards
+    Surveyor's Charm (+1 attack, +2 defence) and 35 XP.
+  * Forgotten Village: The Last Letter - a warning about children being taken beneath the white walls;
+    rewards a Potion and 45 XP.
+  * Corrupted Zone: Subject's Memory - a brief memory fragment tied to Subject 0; rewards Echo Band
+    (+3 attack, +1 defence) and 60 XP.
+- Discoveries have subtle visual glimmers and proximity interaction prompts. They are optional and do
+  not block or replace the main questline.
+- Collected discovery IDs are stored in P.secrets and therefore persist through the existing save
+  system. Older saves without this property remain compatible; the property is initialized lazily.
+- Inventory-full protection: a discovery is not marked collected if its item cannot be added.
+- No map tiles, collision, existing quest objectives, NPCs, enemy spawns, or global RNG were changed.
+
+FILES CHANGED
+- game.js: added EXPLORATION_SECRETS data, persistent discovery tracking, interaction/reward logic,
+  and subtle render markers.
+- PROGRESS.txt: recorded Milestone 2 slice and handover.
+- index.html and style.css unchanged.
+
+VALIDATION
+- PASS: node --check game.js.
+- PASS: procedural map harness confirms all three discovery tiles are walkable and reachable from
+  the Greenhaven start on the 60x68 world.
+- NOT VERIFIED: real-browser appearance, interaction range/feel, save/load persistence in browser,
+  and reward presentation. Include these in the next browser playtest.
+
+NEXT TASKS (MILESTONE 2)
+1. Browser-test all three discoveries, inventory-full behavior, and save/load persistence.
+2. Add a small number of meaningful hidden locations or secret rooms using existing map systems;
+   avoid large map expansion until the exploration loop is proven.
+3. Add one reusable environmental puzzle interaction with a clear clue and worthwhile reward.
+4. Add region-specific exploration rewards and optional lore without crowding main paths.
+5. Add progression-gated revisits only if existing systems support them cleanly.
+
+HANDOVER
+- Use this Milestone 2 checkpoint as the latest source of truth.
+- Do not repeat the three discovery implementation.
+- Browser QA is still pending; do not claim visual or gameplay verification.
+- Continue with the next smallest exploration slice after inspecting this file and game.js.
+
+MILESTONE 2 - WORLD DEPTH & EXPLORATION (CONTINUED, 2026-11-18)
+===============================================================
+IMPLEMENTATION STATUS: COMPLETE FOR THE AGREED MILESTONE 2 SCOPE.
+BROWSER PLAYTEST: PENDING USER REVIEW. Do not claim visual/gameplay QA is complete.
+
+SLICE 2 - HIDDEN LOCATION: SUBMERGED OBSERVATION CHAMBER
+- Added a compact secret observation chamber inside the eastern Whispering Marsh pool.
+- The chamber is surrounded by solid rock with one narrow eastern entrance connected to the
+  existing shallow-water bank. It does not expand the world dimensions.
+- Added a sealed observation console that can be examined from inside the chamber.
+- Discovery reveals another piece of Experiment 7731 lore: Subject 0 was not the first to escape,
+  but was the first to return.
+- Reward: Observer's Key (+2 attack, +3 defence) and 90 XP.
+- The discovery is recorded in P.secrets and persists through the existing localStorage save.
+- The chamber is optional and does not alter the main questline.
+
+SLICE 3 - ENVIRONMENTAL PUZZLE: THE SURVEYOR'S MECHANISM
+- Added three interactable rune stones in Greenhaven: River Stone, Fallen Stump Stone, and Cave
+  Mouth Stone.
+- The Surveyor's Cache field note now gives the clue: touch the stones in river -> stump -> cave
+  order.
+- Correct sequence opens a hidden compartment and awards the Surveyor's Lens (+2 attack, +2
+  defence) and 100 XP.
+- Incorrect order resets the sequence and displays a clue. Inventory-full protection prevents the
+  final step from consuming the sequence unless the reward can be added.
+- Rune sequence and solved state are stored in P.runes / P.runeSolved and persist in existing saves.
+- No new quest or mandatory progression gate was introduced.
+
+SLICE 4 - REGION-SPECIFIC DISCOVERY / REVISIT VALUE
+- Added Flooded Observation Log in Whispering Marsh, an optional lore discovery about the marsh
+  being a constructed memory environment.
+- Reward: Marshglass Pendant (+1 attack, +3 defence) and 75 XP.
+- Existing Greenhaven, Forgotten Village and Corrupted Zone discoveries remain intact.
+- The Marsh chamber, log and rune puzzle give players reasons to explore/revisit earlier areas and
+  connect the biome to the experiment's larger mystery.
+
+FILES CHANGED IN THIS CONTINUATION
+- game.js: added chamber terrain, chamber console interaction, Marsh log, three rune stones, puzzle
+  sequence/reward, rendering and persistent state defaults.
+- PROGRESS.txt: recorded Milestone 2 completion and QA handover.
+- index.html and style.css unchanged.
+
+VALIDATION
+- PASS: node --check game.js.
+- PASS: world-generation harness confirms map remains 60x68.
+- PASS: all new rune stones, the Marsh log and chamber center are on walkable/reachable tiles.
+- PASS: no newly unreachable walkable Marsh tiles were introduced. The 16 unreachable walkable
+  tiles reported by the whole-world harness are pre-existing pockets in the original world; the
+  Marsh itself has no unreachable walkable tiles.
+- PASS: comparison against the previous Milestone 2 checkpoint confirms all original map tiles
+  y=0..43 are byte-for-byte identical at the tile-value level.
+- PASS: JavaScript syntax and ZIP integrity checks.
+- NOT VERIFIED: real-browser visuals, secret chamber entrance visibility/readability, rune puzzle
+  interaction feel, reward presentation, save/load persistence in browser, and full regression.
+- Browser QA remains pending; do not state that these have been visually or gameplay tested.
+
+MILESTONE 2 EXIT CRITERIA
+- Optional discoveries across regions: IMPLEMENTED.
+- Hidden location / secret chamber: IMPLEMENTED.
+- Reusable environmental puzzle interaction: IMPLEMENTED (three-stone sequence).
+- Region-specific lore and rewards: IMPLEMENTED.
+- Reasons to revisit earlier regions: IMPLEMENTED.
+- Browser playtest and final balance review: PENDING USER REVIEW.
+
+NEXT HANDOVER
+1. This ZIP is the latest source of truth.
+2. Ask the user to test the four original discoveries, Flooded Observation Log, Submerged
+   Observation Chamber, and Surveyor's Mechanism in a normal browser.
+3. Check that the chamber doorway can be found and entered, the console is interactable, and the
+   rune order works (including wrong-order reset and inventory-full retry).
+4. Check that all discoveries and puzzle state persist after save/reload.
+5. Run the full-game regression, including existing quests, combat, NPCs, Marsh atmosphere, Warden,
+   Abyss return, and all region transitions. Milestone 1 visual QA is still deferred to this pass.
+6. Fix only confirmed issues from user remarks; do not expand scope or rewrite unrelated systems.
+
+MILESTONE 2 - USER PLAYTEST RESULTS (2026-11-18)
+================================================
+USER-REPORTED PLAYTEST: PASS, 16/16 checks completed.
+- Greenhaven Surveyor's Mechanism solved; Surveyor's Lens reward correct.
+- Greenhaven Surveyor's Cache found; Surveyor's Charm reward correct.
+- Forgotten Village Last Letter discovered; Potion and XP rewards correct.
+- Corrupted Zone Subject's Memory discovered; Echo Band reward correct.
+- Whispering Marsh Observation Chamber entered; hidden entrance found; console inspected;
+  Flooded Observation Log discovered; mist and glowing particles look correct.
+- Older save loads correctly; discoveries and puzzle progress persist after save/reload.
+- No crashes, freezing, or broken previous regions reported.
+
+USER REMARKS TO ADDRESS BEFORE MILESTONE 3
+- Last Letter discovery had no visible rubble around it. Added a larger, detailed rubble cluster
+  around the exact discovery point while leaving its center open for the interaction marker.
+- Corrupted Zone lacked a strong visual identity. Added a cursed pond with animated dark-violet
+  water, corrupted shoreline tiles, ripples, and drifting purple haze/spores.
+- General visual upgrade requested. Added deterministic ground texture detail, richer rubble,
+  and stronger environmental atmosphere without external assets or libraries.
+
+MILESTONE 3 - STORY & QUEST EXPANSION (2026-11-18)
+=================================================
+STATUS: IMPLEMENTED; browser playtest pending.
+GOAL: Continue the main mystery after the Warden and deepen Subject 0's connection to the Observer.
+
+VISUAL IMPROVEMENTS
+- Forgotten Village: five additional rubble clusters frame the Last Letter at tile (32,35).
+  The central discovery position remains open and walkable. Rubble now uses layered masonry shapes
+  rather than two small flat rectangles.
+- Corrupted Zone: added a cursed pond centered around tile (50.5,31.5), with animated violet water,
+  ripples, corrupted shoreline/cracked ground, and drifting purple haze/spores while inside the zone.
+- Added subtle deterministic texture flecks to Greenhaven grass and corrupted ground.
+- No external assets, libraries, or network dependencies added.
+
+MILESTONE 3 - POST-WARDEN CHAPTER
+- Added three sequential quests after The Warden:
+  1. A Signal Beneath the Roots: investigate a signal near the Greenhaven cave. Reveals a recording
+     in Subject 0's voice warning not to trust the one watching from outside. Reward: Rootsignal Charm
+     (+2 attack, +2 defence) and 100 XP.
+  2. The Marsh Remembers: recover a memory echo in Whispering Marsh. Reveals an older Subject 0
+     observing the first subjects awaken. Reward: Memoryglass (+1 attack, +3 defence) and 140 XP.
+  3. The Observer's Mark: trace the signal in the Abandoned Laboratory. The console identifies the
+     observer's voiceprint as Subject 0, timestamped nineteen years in the future. Reward: Observer's
+     Mark (+3 attack, +2 defence) and 200 XP.
+- Each objective has a pulsing marker, proximity interaction prompt, dialogue, XP, and inventory-full
+  protection. Existing quest index/state is reused; no new save subsystem was introduced.
+- Existing completed-Warden saves with q>=5 and qs=0 are upgraded on Continue to start the new
+  chapter. Existing older saves and Milestone 2 discovery/puzzle state remain compatible.
+- The chapter ends with a new unresolved reveal: “Cycle 7732 ready.” The Observer's identity is
+  sharpened but not fully explained, preserving the larger mystery for a later chapter.
+
+FILES CHANGED
+- game.js: added village rubble, cursed pond/shoreline tiles, corrupted-zone atmosphere, ground detail,
+  three post-Warden quests, marker visuals/interactions/rewards, and old-save chapter activation.
+- PROGRESS.txt: recorded Milestone 2 user playtest and Milestone 3 implementation.
+- index.html and style.css unchanged.
+
+VALIDATION
+- PASS: `node --check game.js`.
+- PASS: procedural world harness confirms dimensions remain 60x68.
+- PASS: BFS from Greenhaven start reaches the Last Letter, all Milestone 2 discoveries and puzzle
+  stones, all three new story markers, and the Marsh. The cursed pond does not disconnect the map.
+- PASS: cursed pond water uses solid tile 13 and walkable shoreline tile 14; interaction points remain
+  on reachable ground/floor/shallow tiles.
+- NOT VERIFIED: full in-browser visual inspection, actual dialogue flow, reward pickup, quest chaining,
+  old-save continuation in browser, and full regression. Chromium headless did not produce a usable
+  screenshot in this environment; user should verify these in a normal browser.
+
+NEXT PLAYTEST
+1. Inspect the rubble around the Last Letter at approximately tile (32.5,35.5). Confirm the letter's
+   glow and E prompt remain visible among the new rubble.
+2. Visit the Corrupted Zone and inspect the cursed pond around tile (50.5,31.5), shoreline, haze,
+   particles, and navigation around the water.
+3. Complete the Warden quest, then follow the three new story markers in order: Greenhaven cave area,
+   Whispering Marsh, and Abandoned Laboratory.
+4. Confirm each item/XP reward, save/reload between quests, and test a previously completed-Warden save.
+5. Recheck combat, all old quests, Marsh, Abyss return, and all Milestone 2 discoveries/puzzle progress.
+
+HANDOVER
+- This checkpoint is the latest source of truth.
+- Do not repeat Milestone 2 or rebuild the world. Continue from this Milestone 3 implementation.
+- Wait for the user's playtest remarks before planning the next milestone.
+
+MILESTONE 4 - FREE SUMMONING SYSTEM (2026-11-18)
+================================================
+STATUS: IMPLEMENTED IN THE EXISTING VANILLA JS GAME. AUTOMATED CHECKS PASS; NORMAL-BROWSER
+VISUAL/INTERACTION PLAYTEST IS STILL REQUIRED.
+SCOPE: Summoning system only. Existing world, quests, combat, inventory, enemies, and save keys
+were retained.
+
+PROJECT INSPECTION / INTEGRATION FINDINGS
+- Checkpoint extracted and all four project files inspected: index.html, style.css, game.js,
+  and this PROGRESS.txt.
+- Existing game is a single-player HTML5 Canvas RPG using vanilla JavaScript and CSS.
+- Player state is held in P; save/load uses localStorage key `lastExperimentSave`.
+- Existing inventory is a 24-slot equipment/consumable inventory. Summons therefore use a separate
+  collection object rather than consuming inventory slots or changing equipment handling.
+- Existing game has no class-selection framework, companion combat system, multiplayer server,
+  account identity, or shared database. Summoned classes/characters are currently unlockable
+  collection entries with stats and ability descriptions; they do not replace the existing player
+  combat loadout or add a new companion battle subsystem.
+- Existing quest, world, enemy, and combat implementations were left in place.
+
+IMPLEMENTED FEATURES
+1. Summoning Hub UI
+   - Added hub access from the main menu and an in-game HUD button; keyboard shortcut G opens it.
+   - Added Character Summoning and Class Summoning banner selection.
+   - Added single summon and 10x summon actions. Both are free and have no currency or cooldown.
+   - Added reveal cards with staggered CSS animation and rarity-specific colour/glow identity.
+   - Added results screen and a Collection view with Character/Class filters.
+   - Locked entries remain visible; unlocked entries show description, stats, ability and copy count.
+
+2. Rarity and content data
+   - Added Common, Rare, Epic, Legendary, Mythic, and ADMIN rarity definitions and weighted random
+     selection. ADMIN can only appear in the character banner.
+   - Added five sample classes: Vanguard, Ranger, Arcanist, Duskblade, and Chronist.
+   - Added eleven sample characters, including the exclusive ADMIN — The First Authority.
+   - Entries include names, rarity, visual mark, description, health/attack/defence stats, and ability
+     descriptions.
+   - Developer rarity selector can guarantee each normal rarity for test summons. The selector does
+     not offer ADMIN; ADMIN has a separate claim test action.
+
+3. Collection and save compatibility
+   - Added optional P.collection.classes, P.collection.characters, P.summonHistory, P.profileId,
+     P.adminOwned, and P.adminTitle state.
+   - Missing fields are initialized lazily when new games start, old saves continue, or saves write.
+   - Summon collection and duplicate copy counts are stored in the existing player save; no new save
+     key or save-format replacement was introduced.
+   - Summons do not consume the existing 24-slot inventory.
+
+4. ADMIN local prototype
+   - Added localStorage claim key `lastExperimentAdminClaim`, separate from the player save.
+   - Claim record stores the local profile ID, ADMIN character ID, and claim timestamp.
+   - First successful local claim adds ADMIN to the owner's collection and assigns the unique title
+     `The One Beyond` (displayed as THE ONE BEYOND in the HUD).
+   - Later attempts by the same profile or another profile in this browser are denied; no duplicate
+     ADMIN is added and the developer test button cannot reset or bypass the claim.
+   - Local claim produces an explicitly local announcement/toast.
+   - IMPORTANT: This is not server-wide or secure multiplayer exclusivity. Browser localStorage can
+     be cleared or edited and is not an authoritative, race-safe server database. Genuine global
+     exclusivity requires authenticated player identities, a server-side atomic/transactional
+     claim for the one ADMIN slot, persistent shared storage, server-validated summon outcomes,
+     and a server broadcast/announcement channel. Do not describe this prototype as server-wide.
+
+FILES MODIFIED
+- index.html: added Summoning Hub markup, menu/HUD entry points, banner controls, testing controls,
+  collection view, and results view; added ADMIN title display.
+- style.css: added dark-fantasy summoning layout, responsive cards, rarity colours/glows, reveal
+  animation, testing and collection styling, and ADMIN title styling.
+- game.js: added summon/class/character data, rarity selection, free single/10x logic, results and
+  collection rendering, local ADMIN claim protection, save migration defaults, and G shortcut.
+- PROGRESS.txt: appended this Milestone 4 implementation and validation record.
+
+VALIDATION
+- PASS: `node --check game.js` (JavaScript syntax check after summoning integration).
+- PASS: custom Node VM harness tested guaranteed Mythic class unlock, 10x guaranteed Rare character
+  summons, first ADMIN claim, same-profile duplicate denial, second-profile denial, legacy-save
+  default initialization, and empty collection rendering.
+- PASS: static HTML/JavaScript integration check found no missing literal DOM IDs and no duplicate
+  HTML IDs; all summoning UI IDs are present.
+- NOT VERIFIED: real-browser layout, mobile responsiveness, reveal animation appearance, keyboard G,
+  hub open/close, banner switching, actual localStorage persistence through a browser reload, or
+  complete game regression. A headless Chromium launch in this environment timed out before
+  producing a DOM dump; this is not a successful browser test.
+- NOT VERIFIED: existing pre-summoning player save loaded in a real browser after this change.
+  The migration defaults were exercised in the isolated Node harness, not against a user's actual
+  browser save file.
+- NOT VERIFIED: true multiplayer/server-wide ADMIN exclusivity or announcements; no backend exists.
+
+NEXT PLAYTEST / CONTINUATION
+1. Open the game in a normal browser and start or continue a game. Open Summoning from the HUD or G.
+2. Test both banners, single summon, 10x summon, all five guaranteed normal rarities, results cards,
+   collection filters, locked entries, and duplicate copy counts.
+3. Claim ADMIN once. Confirm THE ONE BEYOND appears in the HUD, the exclusive character appears in
+   the collection, and another new local profile/browser session is denied while the claim remains.
+4. Reload the game and confirm the summon collection, copy counts, ADMIN claim and title persist.
+5. Load an older save made before Milestone 4 and verify that existing progress, quests, inventory,
+   equipment, secrets, runes, and story state remain intact.
+6. Run a focused regression of movement, combat, NPC dialogue, quests, inventory, save/load, region
+   transitions, Whispering Marsh and Abyss return.
+7. Fix only confirmed issues and update this file. Do not start another milestone or add a new
+   companion/combat class system without a separate explicit plan.
+
+
+MILESTONE 5 - STYLE EQUIPMENT, TEST UNLOCKS, AND PAID RELEASE COPY
+=================================================================
+- Added exact-entry test unlocking for every class and character, alongside rarity-guaranteed test summons and the existing separate ADMIN claim test.
+- Unlocked class and character styles can now be equipped/unequipped from the collection. Their HP/ATK/DEF values feed into live player max health, attack damage, and damage reduction. Active style bonuses are displayed in the collection and inventory.
+- ADMIN ownership/equipping adds a unique animated authority aura around the player and a special reveal/collection glow. ADMIN remains locally exclusive.
+- Added Shards currency: new profiles start with 100; normal enemies award 6 or 12 shards depending on XP tier; the Warden awards 150.
+- Created separate test and release copies. Release copy removes all developer controls, disables forced rarity, and charges 50 shards per single summon / 500 per 10x. Test copy remains unlimited and free. Release copy uses separate local save and ADMIN claim keys so the two builds do not share progression in the same browser.
+- Automated syntax and static integration checks are recorded with this milestone; full browser visual testing remains required.
+
+RELEASE COPY NOTE: developer testing controls are hidden/disabled; all summons require Shards.

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Last Experiment</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="c"></canvas><div id="vig"></div>
+
+<div id="hud" class="hidden">
+  <div id="admin-title" class="hidden">THE ONE BEYOND</div>
+  <div id="stats">
+    <div id="lv">LV 1</div>
+    <div class="bars">
+      <div class="bar hp"><i id="hp"></i><b id="hpt"></b></div>
+      <div class="bar st"><i id="st"></i></div>
+      <div class="bar xp"><i id="xp"></i></div>
+    </div>
+  </div>
+  <div id="quest"><h3>Quest</h3><p id="qt"></p></div>
+  <div id="powers">
+    <div class="pw" style="--c:#ff8a4a"><em>1</em>Fire<u id="c1"></u></div>
+    <div class="pw" style="--c:#8eeaff"><em>2</em>Bolt<u id="c2"></u></div>
+    <div class="pw" style="--c:#b07bff"><em>3</em>Shadow<u id="c3"></u></div>
+  </div>
+  <div id="boss" class="hidden"><span>The Warden</span><div class="bar hp"><i id="bossb"></i></div></div>
+  <button id="summon-open" type="button" aria-label="Open summoning hub">Summoning <kbd>G</kbd></button>
+  <div id="zone"></div>
+  <div id="hint"></div>
+  <div id="toast"></div>
+  <div id="keys">WASD move · Click attack · 1-3 powers · Space dodge · E interact · H potion · R weapon · I inventory · Esc pause</div>
+  <div id="touch-controls">
+    <div id="joy-zone">
+      <div id="joy-base"><div id="joy-stick"></div></div>
+    </div>
+    <div id="touch-actions">
+      <div id="touch-powers">
+        <button id="btn-fire" class="t-btn t-pw" style="--c:#ff8a4a" type="button"><span>Fire</span><u id="tc1"></u></button>
+        <button id="btn-bolt" class="t-btn t-pw" style="--c:#8eeaff" type="button"><span>Bolt</span><u id="tc2"></u></button>
+        <button id="btn-shadow" class="t-btn t-pw" style="--c:#b07bff" type="button"><span>Dark</span><u id="tc3"></u></button>
+      </div>
+      <div id="touch-utility">
+        <button id="btn-pot" class="t-btn t-util" type="button" title="Potion (H)">Potion</button>
+        <button id="btn-int" class="t-btn t-util hidden" type="button" title="Interact (E)">Interact</button>
+        <button id="btn-inv" class="t-btn t-util" type="button" title="Inventory (I)">Inv</button>
+      </div>
+      <div id="touch-main">
+        <button id="btn-dodge" class="t-btn" type="button" title="Dodge">Dodge</button>
+        <button id="btn-atk" class="t-btn" type="button" title="Attack">Attack</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="dlg" class="hidden"><b id="dn"></b><p id="dt"></p><small>E or click to continue</small></div>
+<div id="inv" class="panel hidden"></div>
+
+<div id="summon-hub" class="summon-overlay hidden" aria-modal="true" role="dialog" aria-labelledby="summon-title">
+  <section class="summon-shell">
+    <header class="summon-header"><div><p class="eyebrow">THE LAST EXPERIMENT</p><h2 id="summon-title">The Veil of Calling</h2><p class="summon-subtitle">Call forgotten archetypes and echoes from beyond the cycle.</p></div><button id="summon-close" type="button" aria-label="Close summoning hub">Close ✕</button></header>
+    <nav class="summon-nav"><button class="summon-tab on" data-view="summon" type="button">Summoning</button><button class="summon-tab" data-view="collection" type="button">Collection</button></nav>
+    <div id="summon-view">
+      <div class="banner-switch"><button class="banner-choice on" data-banner="character" type="button"><span>CHARACTER SUMMONING</span><small>Call allies, echoes and anomalies</small></button><button class="banner-choice" data-banner="class" type="button"><span>CLASS SUMMONING</span><small>Unlock new combat archetypes</small></button></div>
+      <div id="summon-banner" class="summon-banner character-banner"><p class="eyebrow">THE VEILED ARCHIVE · SHARD SUMMONING</p><h3>Echoes Beyond the Glass</h3><p>Some memories answer when called. Others should remain asleep.</p><div class="rarity-legend"><span class="r-common">COMMON</span><span class="r-rare">RARE</span><span class="r-epic">EPIC</span><span class="r-legendary">LEGENDARY</span><span class="r-mythic">MYTHIC</span><span class="r-admin">ADMIN</span></div></div>
+      <div class="summon-actions"><button id="summon-one" type="button">Single Summon <small>50 SHARDS</small></button><button id="summon-ten" type="button">10× Summon <small>500 SHARDS</small></button></div>
+      <div id="summon-status" class="summon-status" aria-live="polite">All summons are free during development.</div>
+    </div>
+    <div id="collection-view" class="hidden"><div class="collection-heading"><div><h3>Your Collection</h3><p>Locked entries remain visible as undiscovered silhouettes.</p></div><div class="collection-filters"><button class="collection-filter on" data-filter="character" type="button">Characters</button><button class="collection-filter" data-filter="class" type="button">Classes</button></div></div><p id="active-style-summary" class="active-style-summary">Active styles: None + None</p><div id="collection-grid" class="collection-grid"></div></div>
+    <div id="summon-results" class="summon-results hidden"><div class="results-heading"><p class="eyebrow">THE VEIL HAS OPENED</p><h3>Summoning Results</h3><p id="results-caption"></p></div><div id="results-grid" class="results-grid"></div><button id="results-continue" type="button">Continue</button></div>
+  </section>
+</div>
+
+<div id="menu" class="panel">
+  <h1 id="mt">The Last Experiment</h1>
+  <p id="ms">Humanity was never born. It was designed.</p>
+  <button id="bres" class="hidden">Resume</button>
+  <button id="bcont">Continue</button>
+  <button id="bnew">New game</button>
+  <button id="menu-summon">Summoning Hub</button>
+  <small>WASD move · Mouse attack · 1 Fire · 2 Lightning · 3 Shadow · Space dodge · E interact · H potion · R switch weapon · I inventory</small>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
